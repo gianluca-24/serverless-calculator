@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat">
+ 
+    <title>Calculator</title>
+    <style>
+      .card-container {
+        width: 400px;
+        height: auto;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #fff;
+        width: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center; 
+      }
+      .card-container img {
+        max-width: 100%;
+        max-height: 200px; 
+      }
+      .centered-title {
+        text-align: center;
+      }
+      body {
+        font-family: 'Montserrat', sans-serif;
+        background-image: url("bg2.gif");
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-position: center top;  
+
+      }
+      .solution-text {
+        font-size: 20px;
+        color: blue;
+        text-align: center;
+      }
+
+
+    </style>
+</head>
+<body>
+  <div class='card-container'>
+    <h1 class="centered-title">Equation Calculator</h1>
+    <form id="uploadForm">
+        <label for="imageUpload">Select an image to upload:</label><br><br>
+        <input type="file" id="imageUpload" name="image" accept="image/*" required><br><br>
+        <img id="uploadedImage" style="display: none;">
+        <input type="submit" value="Upload Image" disabled>
+    </form>
+    
+    <div id="imageInfo"></div>
+  </div>
+  
+    
+<script>
+const uploadForm = document.getElementById('uploadForm');
+const imageUpload = document.getElementById('imageUpload');
+const imageInfoDiv = document.getElementById('imageInfo');
+const uploadedImage = document.getElementById('uploadedImage');
+
+imageUpload.addEventListener('change', function(event) {
+  const file = event.target.files[0];
+  if (file) {
+    const fileName = file.name;
+
+    const reader = new FileReader();
+    reader.onload = function() {
+      uploadedImage.src = reader.result;
+        const base64String = reader.result.split(',')[1];
+        console.log('Base64 String:', base64String);
+        uploadedImage.style.display = 'block';
+
+    };
+    reader.onerror = function(error) {
+        console.error('Error reading file:', error);
+    };
+    reader.readAsDataURL(file);
+
+    const fileSize = (file.size / 1024).toFixed(2);
+    
+    imageInfoDiv.innerHTML = `<p>Selected File: ${fileName}</p><p>Size: ${fileSize} KB</p>`;
+    uploadForm.querySelector('input[type="submit"]').disabled = false; // Enable submit button
+  } else {
+    imageInfoDiv.innerHTML = '<p>No file selected</p>';
+    uploadedImage.style.display = 'none';
+    uploadForm.querySelector('input[type="submit"]').disabled = true; // Disable submit button
+  }
+});
+
+// Send POST request to API Gateway
+uploadForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            const file = imageUpload.files[0];
+            console.log(file);
+
+            if (file) {
+              const reader = new FileReader();
+
+              reader.onload = async function() {
+                try {
+                  const base64String = reader.result.split(',')[1];
+                  console.log('try to send');
+
+                  // Construct the payload
+                  const payload = {
+                      'image': base64String,
+                      'key': file.name
+                  };
+
+                  // Send the payload to the API endpoint
+                  const response = await fetch('https://zxnl9ge8ej.execute-api.us-east-1.amazonaws.com/prod/upload-image', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify(payload)
+                  });
+                  
+                  const responseData = await response.text();
+                  console.log('Response:', responseData);
+                  imageInfoDiv.innerHTML = '<p style="color: green;">Image uploaded successfully!</p>';
+                  
+                  // add a 0,5 sec sleep to allow the lambda to process the image
+                  //await new Promise(r => setTimeout(r, 1000));
+
+                  // Make GET request to retrieve solution
+                  const getResponse = await fetch(`https://zxnl9ge8ej.execute-api.us-east-1.amazonaws.com/prod/get-result?equation=${encodeURIComponent(file.name)}`, {
+                      method: 'GET',
+                      headers: {
+                      }
+                  });
+
+                  if (!getResponse.ok) {
+                    throw new Error(`HTTP error! Status: ${getResponse.status}`);
+                  }
+
+                  const solutionData = await getResponse.json();
+                  console.log('Solution:', solutionData);
+                  // Display solution
+                  imageInfoDiv.innerHTML += `<p style="font-size: 20px;">Solution:</p>`;
+                  imageInfoDiv.innerHTML += `<p class="solution-text">${solutionData.solution}</p>`;
+                      
+                
+                } catch (error) {
+                  console.error('Error:', error);
+                  imageInfoDiv.innerHTML = '<p style="color: red;">Upload failed! Error: ' + error.message + '</p>';
+                }
+              };
+
+              reader.onerror = function(error) {
+                console.error('Error reading file:', error);
+                imageInfoDiv.innerHTML = '<p>Image upload failed! Error reading file.</p>';
+              };
+
+              reader.readAsDataURL(file);
+            } else {
+              console.log('No file selected');
+              imageInfoDiv.innerHTML = '<p>Image not uploaded!</p>';
+            }
+});
+
+    </script>
+</body>
+</html>
